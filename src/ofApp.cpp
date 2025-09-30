@@ -14,11 +14,11 @@ void ofApp::setup() {
     // Initialize parameters
     timeStep = 0.016f;
     damping = 0.98f;
-    attractionStrength = 50.0f;
+    attractionStrength = 200.0f;
     repulsionStrength = 100.0f;
     maxSpeed = 500.0f;
     connectionDistance = 80.0f;
-    particleSize = 5.0f;  // Larger for easier visibility
+    particleSize = 1.0f;  // Larger for easier visibility
     currentBuffer = 0;
     attractMode = true;
     useSpatialSort = true;  // Enable spatial sorting
@@ -45,7 +45,16 @@ void ofApp::setup() {
     cout << "Setting up particles..." << endl;
     setupParticles();
     
-    cout << "Setup complete! Press 'L' to toggle line rendering." << endl;
+    cout << "Setup complete!" << endl;
+    cout << "Controls:" << endl;
+    cout << "  SPACE: Toggle attract/repel" << endl;
+    cout << "  S: Toggle spatial sort (compare performance)" << endl;
+    cout << "  C: Show spatial locality (green=good, red=bad)" << endl;
+    cout << "  L: Toggle lines on/off" << endl;
+    cout << "  +/-: Adjust search radius" << endl;
+    cout << "  [/]: Adjust connection distance" << endl;
+    cout << endl;
+    cout << "NOTE: When 'C' is enabled, you'll see the Z-order curve pattern!" << endl;
 }
 
 void ofApp::setupShaders() {
@@ -715,6 +724,15 @@ void ofApp::draw() {
     ss << "  Rendering: " << (useShaderRendering ? "GPU" : "CPU") << endl;
     ss << "  Draw Lines: " << (drawLines ? "ON" : "OFF") << endl;
     ss << "  Spatial Sort: " << (useSpatialSort ? "ON" : "OFF") << endl;
+    if (useSpatialSort) {
+        ss << "    Search Radius: " << adaptiveSearchRadius << endl;
+    }
+    if (showSortedConnections) {
+        ss << "  CONNECTION COLORS (C enabled):" << endl;
+        ss << "    Green = spatially close in sorted array" << endl;
+        ss << "    Red = spatially far in sorted array" << endl;
+        ss << "    (You're seeing the Z-order curve!)" << endl;
+    }
     if (useSpatialSort) {
         ss << "  Search Radius: " << adaptiveSearchRadius << endl;
     }
