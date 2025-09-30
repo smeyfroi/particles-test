@@ -26,8 +26,8 @@ void ofApp::setup() {
     // Visualization
     showMortonColors = false;
     showSortedConnections = false;
-    drawLines = false;  // Start with lines disabled to test particles
-    useShaderRendering = false;  // Start with CPU rendering for debugging
+    drawLines = true;  // Enable lines by default now that particles work
+    useShaderRendering = true;  // Use GPU rendering
     adaptiveSearchRadius = 500;  // Default search window
     
     // Performance tracking
@@ -393,6 +393,10 @@ void ofApp::setupParticles() {
     
     // Setup VBO with vertex data (ofVec2f positions)
     particleProxyVbo.setVertexData(particlePositionsOnly.data(), NUM_PARTICLES, GL_DYNAMIC_DRAW);
+    
+    cout << "Particle proxy VBO setup complete" << endl;
+    cout << "  Vertices: " << NUM_PARTICLES << endl;
+    cout << "  First position: (" << particlePositionsOnly[0].x << ", " << particlePositionsOnly[0].y << ")" << endl;
 }
 
 // Morton code (Z-order curve) functions for spatial sorting
@@ -526,6 +530,13 @@ void ofApp::updatePhysics() {
         
         // Update proxy VBO for geometry shader input
         particleProxyVbo.updateVertexData(particlePositionsOnly.data(), NUM_PARTICLES);
+        
+        // Debug TBO data once per second
+        if (frameCounter % 60 == 0) {
+            cout << "TBO update - First position: (" << particlePositionsOnly[0].x << ", "
+                 << particlePositionsOnly[0].y << ")" << endl;
+            cout << "TBO update - First sorted index: " << sortedIndices[0] << endl;
+        }
     }
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     
@@ -551,10 +562,17 @@ void ofApp::draw() {
     
     // Draw lines using geometry shader (optional)
     if (drawLines) {
+        if (frameCounter % 60 == 0) {
+            cout << "Attempting to draw lines with geometry shader..." << endl;
+            cout << "  Spatial sort: " << (useSpatialSort ? "ON" : "OFF") << endl;
+            cout << "  Search radius: " << adaptiveSearchRadius << endl;
+            cout << "  Connection distance: " << connectionDistance << endl;
+        }
+        
         lineRenderShader.begin();
         lineRenderShader.setUniformMatrix4f("modelViewProjectionMatrix",
-                                           ofGetCurrentMatrix(OF_MATRIX_MODELVIEW) *
-                                           ofGetCurrentMatrix(OF_MATRIX_PROJECTION));
+                                           ofGetCurrentMatrix(OF_MATRIX_PROJECTION) *
+                                           ofGetCurrentMatrix(OF_MATRIX_MODELVIEW));
         lineRenderShader.setUniform1i("numParticles", NUM_PARTICLES);
         lineRenderShader.setUniform1f("connectionDistance", connectionDistance);
         lineRenderShader.setUniform1i("useSpatialSort", useSpatialSort ? 1 : 0);
@@ -571,13 +589,28 @@ void ofApp::draw() {
         glBindTexture(GL_TEXTURE_BUFFER, sortedIndicesTexture);
         lineRenderShader.setUniform1i("sortedIndices", 1);
         
+        // Check for errors before drawing
+        GLenum err = glGetError();
+        if (err != GL_NO_ERROR && frameCounter % 60 == 0) {
+            cout << "OpenGL error before line draw: " << err << endl;
+        }
+        
         // Draw points - geometry shader will generate lines
         particleProxyVbo.draw(GL_POINTS, 0, NUM_PARTICLES);
+        
+        err = glGetError();
+        if (err != GL_NO_ERROR && frameCounter % 60 == 0) {
+            cout << "OpenGL error after line draw: " << err << endl;
+        }
         
         glBindTexture(GL_TEXTURE_BUFFER, 0);
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_BUFFER, 0);
         lineRenderShader.end();
+        
+        if (frameCounter % 60 == 0) {
+            cout << "Line draw call completed" << endl;
+        }
     }
     
     // Draw particles

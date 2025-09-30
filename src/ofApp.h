@@ -68,7 +68,7 @@ public:
     void keyPressed(int key);
     
     // Particle count
-    static constexpr int NUM_PARTICLES = 2000;
+    static constexpr int NUM_PARTICLES = 10000;
     
 private:
     void setupShaders();
