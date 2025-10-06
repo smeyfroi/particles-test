@@ -24,17 +24,12 @@ void ofApp::setup() {
     adaptiveSearchRadius = 500;
     useSpatialSort = true;
     showSortedConnections = false;
-    showMortonColors = false;
-    useShaderRendering = true;
     
     // Performance tracking
     avgPhysicsTime = 0.0f;
     avgSortTime = 0.0f;
     avgRenderTime = 0.0f;
     frameCounter = 0;
-    
-    // Initialize spatial grid
-    spatialGrid = SpatialGrid(connectionDistance * 2.0f);
     
     setupShaders();
     setupParticles();
@@ -568,7 +563,6 @@ void ofApp::draw() {
     ss << endl;
     ss << "MODE:" << endl;
     ss << "  Physics: " << (attractMode ? "ATTRACT" : "REPEL") << endl;
-    ss << "  Rendering: " << (useShaderRendering ? "GPU" : "CPU") << endl;
     ss << "  Draw Lines: " << (drawLines ? "ON" : "OFF") << endl;
     ss << "  Spatial Sort: " << (useSpatialSort ? "ON" : "OFF") << endl;
     if (useSpatialSort) {
@@ -580,18 +574,12 @@ void ofApp::draw() {
         ss << "    Red = spatially far in sorted array" << endl;
         ss << "    (You're seeing the Z-order curve!)" << endl;
     }
-    if (useSpatialSort) {
-        ss << "  Search Radius: " << adaptiveSearchRadius << endl;
-    }
-    ss << "  Morton Colors: " << (showMortonColors ? "ON" : "OFF") << endl;
     ss << "  Sorted Connections: " << (showSortedConnections ? "ON" : "OFF") << endl;
     ss << endl;
     ss << "CONTROLS:" << endl;
     ss << "  SPACE: Toggle attract/repel" << endl;
-    ss << "  R: Toggle GPU/CPU rendering" << endl;
     ss << "  L: Toggle line rendering" << endl;
     ss << "  S: Toggle spatial sort" << endl;
-    ss << "  M: Toggle Morton color visualization" << endl;
     ss << "  C: Toggle sorted connection colors" << endl;
     ss << "  +/-: Adjust search radius (" << adaptiveSearchRadius << ")" << endl;
     ss << "  [/]: Adjust connection distance (" << (int)connectionDistance << ")";
@@ -606,6 +594,12 @@ void ofApp::keyPressed(int key) {
     }
     if (key == 'l' || key == 'L') {
         drawLines = !drawLines;
+    }
+    if (key == 's' || key == 'S') {
+        useSpatialSort = !useSpatialSort;
+    }
+    if (key == 'c' || key == 'C') {
+        showSortedConnections = !showSortedConnections;
     }
     if (key == '+' || key == '=') {
         adaptiveSearchRadius = std::min(adaptiveSearchRadius + 50, NUM_PARTICLES);

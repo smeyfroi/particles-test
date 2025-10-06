@@ -1,7 +1,6 @@
 #pragma once
 
 #include "ofMain.h"
-#include <unordered_map>
 #include <vector>
 
 // Particle structure matching shader layout
@@ -15,49 +14,6 @@ struct ParticleWithMorton {
     int index;
     uint32_t mortonCode;
     ofVec2f position;
-};
-
-// Spatial grid for fast proximity queries
-class SpatialGrid {
-public:
-    float cellSize;
-    std::unordered_map<int, std::vector<int>> grid;
-    
-    SpatialGrid() : cellSize(100.0f) {}  // Default constructor
-    SpatialGrid(float size) : cellSize(size) {}
-    
-    void clear() { grid.clear(); }
-    
-    int hash(int x, int y) {
-        return x * 73856093 ^ y * 19349663;
-    }
-    
-    void insert(int particleIdx, const ofVec2f& pos) {
-        int x = (int)floor(pos.x / cellSize);
-        int y = (int)floor(pos.y / cellSize);
-        grid[hash(x, y)].push_back(particleIdx);
-    }
-    
-    void queryNeighbors(const ofVec2f& pos, float radius,
-                       std::vector<int>& neighbors) {
-        neighbors.clear();
-        int minX = (int)floor((pos.x - radius) / cellSize);
-        int maxX = (int)floor((pos.x + radius) / cellSize);
-        int minY = (int)floor((pos.y - radius) / cellSize);
-        int maxY = (int)floor((pos.y + radius) / cellSize);
-        
-        for (int x = minX; x <= maxX; x++) {
-            for (int y = minY; y <= maxY; y++) {
-                int h = hash(x, y);
-                auto it = grid.find(h);
-                if (it != grid.end()) {
-                    neighbors.insert(neighbors.end(),
-                                   it->second.begin(),
-                                   it->second.end());
-                }
-            }
-        }
-    }
 };
 
 class ofApp : public ofBaseApp {
@@ -90,10 +46,8 @@ private:
     float particleSize;
     
     // Visualization modes
-    bool showMortonColors;
     bool showSortedConnections;
-    bool drawLines;  // Toggle line rendering
-    bool useShaderRendering;  // Toggle between shader and CPU rendering
+    bool drawLines;
     int adaptiveSearchRadius;
     
     // Performance profiling
@@ -127,11 +81,8 @@ private:
     GLuint sortedIndicesTexture;
     bool useSpatialSort;
     
-    // Spatial grid for comparison
-    SpatialGrid spatialGrid;
     std::vector<Particle> particles;
     
     // Mouse interaction
-    ofVec2f mouseForce;
     bool attractMode;
 };
