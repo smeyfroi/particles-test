@@ -11,10 +11,10 @@ void ofApp::setup() {
     // Initialize parameters
     timeStep = 0.016f;
     damping = 0.98f;
-    attractionStrength = 500.0f;
-    repulsionStrength = 500.0f;
-    maxSpeed = 500.0f;
-    connectionDistance = 80.0f;
+    attractionStrength = 0.005f;
+    repulsionStrength = 0.005f;
+    maxSpeed = 0.5f;
+    connectionDistance = 0.08f;
     particleSize = 5.0f;
     currentBuffer = 0;
     attractMode = true;
@@ -22,6 +22,10 @@ void ofApp::setup() {
     // Visualization
     drawLines = true;
     adaptiveSearchRadius = 500;
+    useSpatialSort = true;
+    showSortedConnections = false;
+    showMortonColors = false;
+    useShaderRendering = true;
     
     // Performance tracking
     avgPhysicsTime = 0.0f;
@@ -30,7 +34,7 @@ void ofApp::setup() {
     frameCounter = 0;
     
     // Initialize spatial grid
-    spatialGrid = SpatialGrid(connectionDistance);
+    spatialGrid = SpatialGrid(connectionDistance * 2.0f);
     
     setupShaders();
     setupParticles();
@@ -61,8 +65,8 @@ void ofApp::setupShaders() {
             // Mouse force
             vec2 toMouse = mousePos - pos;
             float dist = length(toMouse);
-            if (dist > 0.1 && dist < 300.0) {
-                vec2 force = normalize(toMouse) * mouseStrength / (dist * 0.1);
+            if (dist > 0.001 && dist < 0.3) {
+                vec2 force = normalize(toMouse) * mouseStrength / dist;
                 vel += force * deltaTime;
             }
             
@@ -102,13 +106,15 @@ void ofApp::setupShaders() {
         
         uniform mat4 modelViewProjectionMatrix;
         uniform float particleSize;
+        uniform vec2 screenSize;
         
         out float speed;
         
         void main() {
-            gl_Position = modelViewProjectionMatrix * vec4(position, 0.0, 1.0);
+            vec2 screenPos = position * screenSize;
+            gl_Position = modelViewProjectionMatrix * vec4(screenPos, 0.0, 1.0);
             gl_PointSize = particleSize;
-            speed = length(velocity) / 500.0;
+            speed = length(velocity) / 0.5;
         }
     )";
     
@@ -135,13 +141,17 @@ void ofApp::setupShaders() {
         
         layout(location = 0) in vec2 position;
         
+        uniform vec2 screenSize;
+        
         out VS_OUT {
             vec2 position;
+            vec2 screenPosition;
             int particleId;
         } vs_out;
         
         void main() {
             vs_out.position = position;
+            vs_out.screenPosition = position * screenSize;
             vs_out.particleId = gl_VertexID;
         }
     )";
@@ -154,25 +164,28 @@ void ofApp::setupShaders() {
         
         in VS_OUT {
             vec2 position;
+            vec2 screenPosition;
             int particleId;
         } gs_in[];
         
         uniform mat4 modelViewProjectionMatrix;
-        uniform samplerBuffer particlePositions;  // All particle positions (in sorted order when sorting enabled)
-        uniform isamplerBuffer sortedIndices;     // Original particle indices (for avoiding duplicates)
+        uniform samplerBuffer particlePositions;
+        uniform isamplerBuffer sortedIndices;
         uniform int numParticles;
         uniform float connectionDistance;
         uniform bool useSpatialSort;
         uniform int adaptiveSearchRadius;
         uniform bool showSortedConnections;
+        uniform vec2 screenSize;
         
         out float lineAlpha;
         out vec3 lineColor;
         
         void main() {
             vec2 currentPos = gs_in[0].position;
-            int mySortedPos = gs_in[0].particleId;  // This is now the sorted position
-            int myOriginalId = texelFetch(sortedIndices, mySortedPos).r;  // Get original particle ID
+            vec2 currentScreenPos = gs_in[0].screenPosition;
+            int mySortedPos = gs_in[0].particleId;
+            int myOriginalId = texelFetch(sortedIndices, mySortedPos).r;
             
             float maxDist = connectionDistance;
             float maxDistSq = maxDist * maxDist;
@@ -180,27 +193,24 @@ void ofApp::setupShaders() {
             int lineCount = 0;
             
             if (useSpatialSort) {
-                // Optimized: Check nearby particles in sorted order
                 int searchRadius = adaptiveSearchRadius;
                 int startIdx = max(0, mySortedPos - searchRadius);
                 int endIdx = min(numParticles - 1, mySortedPos + searchRadius);
                 
                 for (int sortedIdx = startIdx; sortedIdx <= endIdx && lineCount < 127; sortedIdx++) {
-                    if (sortedIdx == mySortedPos) continue;  // Skip self
+                    if (sortedIdx == mySortedPos) continue;
                     
-                    // Get original ID to avoid duplicate lines
                     int otherOriginalId = texelFetch(sortedIndices, sortedIdx).r;
-                    if (otherOriginalId <= myOriginalId) continue;  // Only draw i->j where j > i
+                    if (otherOriginalId <= myOriginalId) continue;
                     
                     vec2 otherPos = texelFetch(particlePositions, sortedIdx).xy;
                     vec2 delta = otherPos - currentPos;
                     float distSq = dot(delta, delta);
                     
-                    if (distSq < maxDistSq && distSq > 0.01) {
+                    if (distSq < maxDistSq && distSq > 0.0001) {
                         float dist = sqrt(distSq);
                         lineAlpha = 1.0 - (dist / maxDist);
                         
-                        // Color lines based on distance in sorted array
                         if (showSortedConnections) {
                             float sortedDist = abs(float(sortedIdx - mySortedPos)) / float(searchRadius);
                             lineColor = mix(vec3(0.2, 0.8, 0.2), vec3(0.8, 0.2, 0.2), sortedDist);
@@ -208,10 +218,11 @@ void ofApp::setupShaders() {
                             lineColor = vec3(0.3, 0.6, 0.9);
                         }
                         
-                        gl_Position = modelViewProjectionMatrix * vec4(currentPos, 0.0, 1.0);
+                        vec2 otherScreenPos = otherPos * screenSize;
+                        gl_Position = modelViewProjectionMatrix * vec4(currentScreenPos, 0.0, 1.0);
                         EmitVertex();
                         
-                        gl_Position = modelViewProjectionMatrix * vec4(otherPos, 0.0, 1.0);
+                        gl_Position = modelViewProjectionMatrix * vec4(otherScreenPos, 0.0, 1.0);
                         EmitVertex();
                         
                         EndPrimitive();
@@ -219,7 +230,6 @@ void ofApp::setupShaders() {
                     }
                 }
             } else {
-                // Brute force: Check all particles
                 for (int i = 0; i < numParticles && lineCount < 127; i++) {
                     if (i == mySortedPos) continue;
                     
@@ -230,15 +240,16 @@ void ofApp::setupShaders() {
                     vec2 delta = otherPos - currentPos;
                     float distSq = dot(delta, delta);
                     
-                    if (distSq < maxDistSq && distSq > 0.01) {
+                    if (distSq < maxDistSq && distSq > 0.0001) {
                         float dist = sqrt(distSq);
                         lineAlpha = 1.0 - (dist / maxDist);
                         lineColor = vec3(0.3, 0.6, 0.9);
                         
-                        gl_Position = modelViewProjectionMatrix * vec4(currentPos, 0.0, 1.0);
+                        vec2 otherScreenPos = otherPos * screenSize;
+                        gl_Position = modelViewProjectionMatrix * vec4(currentScreenPos, 0.0, 1.0);
                         EmitVertex();
                         
-                        gl_Position = modelViewProjectionMatrix * vec4(otherPos, 0.0, 1.0);
+                        gl_Position = modelViewProjectionMatrix * vec4(otherScreenPos, 0.0, 1.0);
                         EmitVertex();
                         
                         EndPrimitive();
@@ -281,16 +292,15 @@ void ofApp::setupShaders() {
 }
 
 void ofApp::setupParticles() {
-    // Initialize particle data
     particles.resize(NUM_PARTICLES);
     particlesWithMorton.resize(NUM_PARTICLES);
     sortedIndices.resize(NUM_PARTICLES);
     
     for (int i = 0; i < NUM_PARTICLES; i++) {
-        particles[i].position.x = ofRandom(ofGetWidth());
-        particles[i].position.y = ofRandom(ofGetHeight());
-        particles[i].velocity.x = ofRandom(-50, 50);
-        particles[i].velocity.y = ofRandom(-50, 50);
+        particles[i].position.x = ofRandom(0.0f, 1.0f);
+        particles[i].position.y = ofRandom(0.0f, 1.0f);
+        particles[i].velocity.x = ofRandom(-0.05f, 0.05f);
+        particles[i].velocity.y = ofRandom(-0.05f, 0.05f);
         sortedIndices[i] = i;
     }
     
@@ -366,15 +376,12 @@ uint32_t ofApp::expandBits(uint32_t v) {
 }
 
 uint32_t ofApp::calculateMortonCode(float x, float y) {
-    // Normalize to [0, 1024) range
-    uint32_t xx = (uint32_t)(x / ofGetWidth() * 1024.0f);
-    uint32_t yy = (uint32_t)(y / ofGetHeight() * 1024.0f);
+    uint32_t xx = (uint32_t)(x * 1024.0f);
+    uint32_t yy = (uint32_t)(y * 1024.0f);
     
-    // Clamp to valid range
     xx = std::min(xx, 1023u);
     yy = std::min(yy, 1023u);
     
-    // Interleave bits (Z-order curve)
     return expandBits(xx) | (expandBits(yy) << 1);
 }
 
@@ -417,10 +424,12 @@ void ofApp::updatePhysics() {
     particleUpdateShader.begin();
     particleUpdateShader.setUniform1f("deltaTime", timeStep);
     particleUpdateShader.setUniform1f("damping", damping);
-    particleUpdateShader.setUniform2f("mousePos", mouseX, mouseY);
+    particleUpdateShader.setUniform2f("mousePos", 
+                                     ofGetMouseX() / (float)ofGetWidth(), 
+                                     ofGetMouseY() / (float)ofGetHeight());
     particleUpdateShader.setUniform1f("mouseStrength",
                                      attractMode ? attractionStrength : -repulsionStrength);
-    particleUpdateShader.setUniform2f("bounds", ofGetWidth(), ofGetHeight());
+    particleUpdateShader.setUniform2f("bounds", 1.0f, 1.0f);
     particleUpdateShader.setUniform1f("maxSpeed", maxSpeed);
     
     // Bind read buffer
@@ -501,6 +510,9 @@ void ofApp::draw() {
         lineRenderShader.setUniform1i("numParticles", NUM_PARTICLES);
         lineRenderShader.setUniform1f("connectionDistance", connectionDistance);
         lineRenderShader.setUniform1i("adaptiveSearchRadius", adaptiveSearchRadius);
+        lineRenderShader.setUniform2f("screenSize", ofGetWidth(), ofGetHeight());
+        lineRenderShader.setUniform1i("useSpatialSort", useSpatialSort ? 1 : 0);
+        lineRenderShader.setUniform1i("showSortedConnections", showSortedConnections ? 1 : 0);
         
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_BUFFER, particlePositionTexture);
@@ -525,6 +537,7 @@ void ofApp::draw() {
     ofMatrix4x4 mvp = ofGetCurrentMatrix(OF_MATRIX_PROJECTION) * ofGetCurrentMatrix(OF_MATRIX_MODELVIEW);
     particleRenderShader.setUniformMatrix4f("modelViewProjectionMatrix", mvp);
     particleRenderShader.setUniform1f("particleSize", particleSize);
+    particleRenderShader.setUniform2f("screenSize", ofGetWidth(), ofGetHeight());
     
     glBindVertexArray(vao[currentBuffer]);
     glDrawArrays(GL_POINTS, 0, NUM_PARTICLES);
