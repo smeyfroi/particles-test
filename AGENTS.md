@@ -1,25 +1,21 @@
-AGENTS guide for this repository (openFrameworks C++ macOS)
+AGENTS guide for this repository (openFrameworks C++ on macOS)
 
 Build/lint/test
-- Build (Makefile):
-  - Debug: make Debug
-  - Release: make Release
-  - Clean: make clean
-  - Run (from bin): ./bin/particles-test.app/Contents/MacOS/particles-test
-- Build (Xcode): open particles-test.xcodeproj and use the "particles-test Debug/Release" schemes
-- Lint/format: use clang-format (LLVM style, C++17-friendly). Check only: clang-format -n -Werror $(git ls-files "*.{h,hpp,cpp,cxx}") ; Fix: clang-format -i ...
-- Tests: none present. If adding tests, prefer Catch2 or GoogleTest; single test example (gtest): ctest -R NameRegex or bazel/meson as appropriate.
+- Makefile: Debug make Debug; Release make Release; Clean make clean; Run ./bin/particles-test.app/Contents/MacOS/particles-test
+- Xcode: open particles-test.xcodeproj; use schemes "particles-test Debug/Release"
+- Lint/format: clang-format (LLVM). Check clang-format -n -Werror $(git ls-files "*.{h,hpp,cpp,cxx}"); Fix clang-format -i $(git ls-files "*.{h,hpp,cpp,cxx}")
+- Tests: none in repo. If adding gtest: ctest -R <NameRegex>; Catch2: ctest -R <NameRegex>. Prefer single-test runs via ctest -R
 
 Code style
-- Imports/includes: use angle brackets for OF/system headers (<ofMain.h>), quotes for local headers ("ofApp.h"); group and order: C++ std, third-party, openFrameworks, local.
-- Formatting: 2 spaces indent; braces on same line for functions/classes; max line length ~100; run clang-format before committing.
-- Types: prefer explicit fixed-width types (std::int32_t, std::size_t); use const & for non-owning; use auto only when type is obvious.
-- Naming: PascalCase for types/classes, camelCase for functions/variables, UPPER_SNAKE_CASE for macros/const globals; member fields with trailing _ or mPrefix (pick one and stay consistent).
-- Error handling: avoid exceptions in per-frame code; check return values; log via ofLogNotice/Warning/Error; validate pointers; guard GPU calls.
-- Resource management: prefer RAII, std::unique_ptr/std::shared_ptr; avoid raw new/delete; use ofScopedLock for threads.
-- Build config: set C++ standard in config.make if needed (uncomment MAC_OS_CPP_VER) and ensure minimum macOS target matches std.
-- Performance: avoid allocations in update/draw; pre-reserve vectors; use const and references; consider ofFbo/ofVbo for batching.
-- Platform: paths via ofToDataPath; keep code portable across Debug/Release.
+- Includes: <...> for OF/system (e.g., <ofMain.h>), "..." for local (e.g., "ofApp.h"); order: C++ std, third-party, openFrameworks, local
+- Formatting: 2-space indent; braces on same line; ~100 col limit; run clang-format pre-commit
+- Types: prefer fixed-width std::int32_t, std::size_t; pass non-owning as const&; use auto only when obvious
+- Naming: PascalCase types, camelCase funcs/vars, UPPER_SNAKE_CASE macros/consts; members end with _ (or mPrefix consistently)
+- Errors: avoid exceptions in per-frame; check return values; log via ofLogNotice/Warning/Error; validate pointers; guard GPU calls
+- RAII: prefer std::unique_ptr/std::shared_ptr; avoid raw new/delete; use ofScopedLock for threads
+- Build config: set C++ std in config.make (MAC_OS_CPP_VER) and ensure macOS deployment target compatible
+- Performance: no per-frame allocations; reserve vectors; use const/refs; batch with ofFbo/ofVbo when appropriate
+- Platform: use ofToDataPath for file I/O; keep Debug/Release parity
 
 Cursor/Copilot rules
-- No .cursor rules or .github/copilot-instructions.md found in this project at generation time.
+- No .cursor rules or .github/copilot-instructions.md present at generation time

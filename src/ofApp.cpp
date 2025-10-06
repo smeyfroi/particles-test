@@ -8,27 +8,20 @@ void ofApp::setup() {
     ofSetVerticalSync(true);
     ofBackground(0);
     
-    cout << "Setting up particle system..." << endl;
-    cout << "Window size: " << ofGetWidth() << "x" << ofGetHeight() << endl;
-    
     // Initialize parameters
     timeStep = 0.016f;
     damping = 0.98f;
-    attractionStrength = 200.0f;
-    repulsionStrength = 100.0f;
+    attractionStrength = 500.0f;
+    repulsionStrength = 500.0f;
     maxSpeed = 500.0f;
     connectionDistance = 80.0f;
-    particleSize = 1.0f;  // Larger for easier visibility
+    particleSize = 5.0f;
     currentBuffer = 0;
     attractMode = true;
-    useSpatialSort = true;  // Enable spatial sorting
     
     // Visualization
-    showMortonColors = false;
-    showSortedConnections = false;
-    drawLines = true;  // Enable lines by default now that particles work
-    useShaderRendering = true;  // Use GPU rendering
-    adaptiveSearchRadius = 500;  // Default search window
+    drawLines = true;
+    adaptiveSearchRadius = 500;
     
     // Performance tracking
     avgPhysicsTime = 0.0f;
@@ -36,25 +29,11 @@ void ofApp::setup() {
     avgRenderTime = 0.0f;
     frameCounter = 0;
     
-    // Initialize spatial grid (cell size = connection distance for efficiency)
+    // Initialize spatial grid
     spatialGrid = SpatialGrid(connectionDistance);
     
-    cout << "Setting up shaders..." << endl;
     setupShaders();
-    
-    cout << "Setting up particles..." << endl;
     setupParticles();
-    
-    cout << "Setup complete!" << endl;
-    cout << "Controls:" << endl;
-    cout << "  SPACE: Toggle attract/repel" << endl;
-    cout << "  S: Toggle spatial sort (compare performance)" << endl;
-    cout << "  C: Show spatial locality (green=good, red=bad)" << endl;
-    cout << "  L: Toggle lines on/off" << endl;
-    cout << "  +/-: Adjust search radius" << endl;
-    cout << "  [/]: Adjust connection distance" << endl;
-    cout << endl;
-    cout << "NOTE: When 'C' is enabled, you'll see the Z-order curve pattern!" << endl;
 }
 
 void ofApp::setupShaders() {
@@ -289,28 +268,16 @@ void ofApp::setupShaders() {
     const char* varyings[] = {"outPosition", "outVelocity"};
     GLuint program = particleUpdateShader.getProgram();
     glTransformFeedbackVaryings(program, 2, varyings, GL_INTERLEAVED_ATTRIBS);
-    if (!particleUpdateShader.linkProgram()) {
-        cout << "ERROR: Failed to link particle update shader!" << endl;
-    } else {
-        cout << "Particle update shader compiled successfully" << endl;
-    }
+    particleUpdateShader.linkProgram();
     
     particleRenderShader.setupShaderFromSource(GL_VERTEX_SHADER, particleVert);
     particleRenderShader.setupShaderFromSource(GL_FRAGMENT_SHADER, particleFrag);
-    if (!particleRenderShader.linkProgram()) {
-        cout << "ERROR: Failed to link particle render shader!" << endl;
-    } else {
-        cout << "Particle render shader compiled successfully" << endl;
-    }
+    particleRenderShader.linkProgram();
     
     lineRenderShader.setupShaderFromSource(GL_VERTEX_SHADER, lineVert);
     lineRenderShader.setupShaderFromSource(GL_GEOMETRY_SHADER, lineGeom);
     lineRenderShader.setupShaderFromSource(GL_FRAGMENT_SHADER, lineFrag);
-    if (!lineRenderShader.linkProgram()) {
-        cout << "ERROR: Failed to link line render shader!" << endl;
-    } else {
-        cout << "Line render shader compiled successfully" << endl;
-    }
+    lineRenderShader.linkProgram();
 }
 
 void ofApp::setupParticles() {
@@ -319,18 +286,13 @@ void ofApp::setupParticles() {
     particlesWithMorton.resize(NUM_PARTICLES);
     sortedIndices.resize(NUM_PARTICLES);
     
-    cout << "Initializing " << NUM_PARTICLES << " particles..." << endl;
-    
     for (int i = 0; i < NUM_PARTICLES; i++) {
         particles[i].position.x = ofRandom(ofGetWidth());
         particles[i].position.y = ofRandom(ofGetHeight());
         particles[i].velocity.x = ofRandom(-50, 50);
         particles[i].velocity.y = ofRandom(-50, 50);
-        sortedIndices[i] = i;  // Initially unsorted
+        sortedIndices[i] = i;
     }
-    
-    cout << "First particle at: (" << particles[0].position.x << ", " << particles[0].position.y << ")" << endl;
-    cout << "Last particle at: (" << particles[NUM_PARTICLES-1].position.x << ", " << particles[NUM_PARTICLES-1].position.y << ")" << endl;
     
     // Create ping-pong buffers for transform feedback
     glGenVertexArrays(2, vao);
@@ -361,16 +323,7 @@ void ofApp::setupParticles() {
     glBindVertexArray(0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     
-    // Debug: Check VAO state
-    cout << "VAO setup complete. Checking state..." << endl;
-    glBindVertexArray(vao[0]);
-    GLint enabled0, enabled1;
-    glGetVertexAttribiv(0, GL_VERTEX_ATTRIB_ARRAY_ENABLED, &enabled0);
-    glGetVertexAttribiv(1, GL_VERTEX_ATTRIB_ARRAY_ENABLED, &enabled1);
-    cout << "VAO[0]: Attribute 0 enabled: " << enabled0 << ", Attribute 1 enabled: " << enabled1 << endl;
-    glBindVertexArray(0);
-    
-    // Create Texture Buffer Object for particle positions (used by geometry shader)
+    // Create Texture Buffer Object for particle positions
     glGenBuffers(1, &particlePositionTBO);
     glBindBuffer(GL_TEXTURE_BUFFER, particlePositionTBO);
     glBufferData(GL_TEXTURE_BUFFER, NUM_PARTICLES * sizeof(ofVec2f), nullptr, GL_DYNAMIC_DRAW);
@@ -394,18 +347,12 @@ void ofApp::setupParticles() {
     glTexBuffer(GL_TEXTURE_BUFFER, GL_R32I, sortedIndicesTBO);  // Single integer per element
     glBindTexture(GL_TEXTURE_BUFFER, 0);
     
-    // Setup proxy VBO for line rendering - initialize with actual position data
+    // Setup proxy VBO for line rendering
     particlePositionsOnly.resize(NUM_PARTICLES);
     for (int i = 0; i < NUM_PARTICLES; i++) {
         particlePositionsOnly[i] = particles[i].position;
     }
-    
-    // Setup VBO with vertex data (ofVec2f positions)
     particleProxyVbo.setVertexData(particlePositionsOnly.data(), NUM_PARTICLES, GL_DYNAMIC_DRAW);
-    
-    cout << "Particle proxy VBO setup complete" << endl;
-    cout << "  Vertices: " << NUM_PARTICLES << endl;
-    cout << "  First position: (" << particlePositionsOnly[0].x << ", " << particlePositionsOnly[0].y << ")" << endl;
 }
 
 // Morton code (Z-order curve) functions for spatial sorting
@@ -512,25 +459,14 @@ void ofApp::updatePhysics() {
             particlePositionsOnly[i] = particles[i].position;
         }
         
-        // Perform spatial sort if enabled (this will reorder particlePositionsOnly)
-        if (useSpatialSort) {
-            auto sortStart = std::chrono::high_resolution_clock::now();
-            spatialSort();
-            auto sortEnd = std::chrono::high_resolution_clock::now();
-            float sortTime = std::chrono::duration<float, std::milli>(sortEnd - sortStart).count();
-            avgSortTime = avgSortTime * 0.95f + sortTime * 0.05f;  // Exponential moving average
-        } else {
-            // If not sorting, just use original order for sorted indices
-            for (int i = 0; i < NUM_PARTICLES; i++) {
-                sortedIndices[i] = i;
-            }
-            // Upload unsorted indices
-            glBindBuffer(GL_TEXTURE_BUFFER, sortedIndicesTBO);
-            glBufferSubData(GL_TEXTURE_BUFFER, 0, NUM_PARTICLES * sizeof(int), sortedIndices.data());
-            glBindBuffer(GL_TEXTURE_BUFFER, 0);
-        }
+        // Perform spatial sort (always enabled)
+        auto sortStart = std::chrono::high_resolution_clock::now();
+        spatialSort();
+        auto sortEnd = std::chrono::high_resolution_clock::now();
+        float sortTime = std::chrono::duration<float, std::milli>(sortEnd - sortStart).count();
+        avgSortTime = avgSortTime * 0.95f + sortTime * 0.05f;
         
-        // Update texture buffer with positions (sorted or unsorted)
+        // Update texture buffer with positions
         glBindBuffer(GL_TEXTURE_BUFFER, particlePositionTBO);
         glBufferSubData(GL_TEXTURE_BUFFER, 0,
                        NUM_PARTICLES * sizeof(ofVec2f),
@@ -539,13 +475,6 @@ void ofApp::updatePhysics() {
         
         // Update proxy VBO for geometry shader input
         particleProxyVbo.updateVertexData(particlePositionsOnly.data(), NUM_PARTICLES);
-        
-        // Debug TBO data once per second
-        if (frameCounter % 60 == 0) {
-            cout << "TBO update - First position: (" << particlePositionsOnly[0].x << ", "
-                 << particlePositionsOnly[0].y << ")" << endl;
-            cout << "TBO update - First sorted index: " << sortedIndices[0] << endl;
-        }
     }
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     
@@ -556,12 +485,6 @@ void ofApp::updatePhysics() {
 
 void ofApp::update() {
     updatePhysics();
-    
-    // Debug logging every 60 frames (once per second)
-    if (frameCounter % 60 == 0) {
-        cout << "Frame " << frameCounter << ": First particle at ("
-             << particles[0].position.x << ", " << particles[0].position.y << ")" << endl;
-    }
 }
 
 void ofApp::draw() {
@@ -569,137 +492,48 @@ void ofApp::draw() {
     
     ofEnableBlendMode(OF_BLENDMODE_ADD);
     
-    // Draw lines using geometry shader (optional)
+    // Draw lines using geometry shader
     if (drawLines) {
-        if (frameCounter % 60 == 0) {
-            cout << "Attempting to draw lines with geometry shader..." << endl;
-            cout << "  Spatial sort: " << (useSpatialSort ? "ON" : "OFF") << endl;
-            cout << "  Search radius: " << adaptiveSearchRadius << endl;
-            cout << "  Connection distance: " << connectionDistance << endl;
-        }
-        
         lineRenderShader.begin();
         lineRenderShader.setUniformMatrix4f("modelViewProjectionMatrix",
                                            ofGetCurrentMatrix(OF_MATRIX_PROJECTION) *
                                            ofGetCurrentMatrix(OF_MATRIX_MODELVIEW));
         lineRenderShader.setUniform1i("numParticles", NUM_PARTICLES);
         lineRenderShader.setUniform1f("connectionDistance", connectionDistance);
-        lineRenderShader.setUniform1i("useSpatialSort", useSpatialSort ? 1 : 0);
         lineRenderShader.setUniform1i("adaptiveSearchRadius", adaptiveSearchRadius);
-        lineRenderShader.setUniform1i("showSortedConnections", showSortedConnections ? 1 : 0);
         
-        // Bind texture buffer containing all particle positions
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_BUFFER, particlePositionTexture);
         lineRenderShader.setUniform1i("particlePositions", 0);
         
-        // Bind texture buffer containing sorted indices
         glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_BUFFER, sortedIndicesTexture);
         lineRenderShader.setUniform1i("sortedIndices", 1);
         
-        // Check for errors before drawing
-        GLenum err = glGetError();
-        if (err != GL_NO_ERROR && frameCounter % 60 == 0) {
-            cout << "OpenGL error before line draw: " << err << endl;
-        }
-        
-        // Draw points - geometry shader will generate lines
         particleProxyVbo.draw(GL_POINTS, 0, NUM_PARTICLES);
-        
-        err = glGetError();
-        if (err != GL_NO_ERROR && frameCounter % 60 == 0) {
-            cout << "OpenGL error after line draw: " << err << endl;
-        }
         
         glBindTexture(GL_TEXTURE_BUFFER, 0);
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_BUFFER, 0);
         lineRenderShader.end();
-        
-        if (frameCounter % 60 == 0) {
-            cout << "Line draw call completed" << endl;
-        }
     }
     
     // Draw particles
-    if (useShaderRendering) {
-        // GPU rendering with shaders
-        glEnable(GL_PROGRAM_POINT_SIZE);  // Required for gl_PointSize to work
-        
-        // Debug: Check if we have valid data in the VBO
-        if (frameCounter % 60 == 0) {
-            glBindBuffer(GL_ARRAY_BUFFER, vbo[currentBuffer]);
-            Particle* testData = (Particle*)glMapBuffer(GL_ARRAY_BUFFER, GL_READ_ONLY);
-            if (testData) {
-                cout << "VBO data check - Particle 0: pos(" << testData[0].position.x << ", "
-                     << testData[0].position.y << ") vel(" << testData[0].velocity.x << ", "
-                     << testData[0].velocity.y << ")" << endl;
-                cout << "Particle 100: pos(" << testData[100].position.x << ", "
-                     << testData[100].position.y << ")" << endl;
-                glUnmapBuffer(GL_ARRAY_BUFFER);
-            }
-            glBindBuffer(GL_ARRAY_BUFFER, 0);
-        }
-        
-        particleRenderShader.begin();
-        
-        // Use openFrameworks' built-in matrix
-        ofMatrix4x4 mvp = ofGetCurrentMatrix(OF_MATRIX_PROJECTION) * ofGetCurrentMatrix(OF_MATRIX_MODELVIEW);
-        particleRenderShader.setUniformMatrix4f("modelViewProjectionMatrix", mvp);
-        particleRenderShader.setUniform1f("particleSize", particleSize);
-        
-        if (frameCounter % 60 == 0) {
-            cout << "Drawing " << NUM_PARTICLES << " points with point size " << particleSize << endl;
-        }
-        
-        glBindVertexArray(vao[currentBuffer]);
-        
-        // Check for OpenGL errors
-        GLenum err = glGetError();
-        if (err != GL_NO_ERROR && frameCounter % 60 == 0) {
-            cout << "OpenGL error before draw: " << err << endl;
-        }
-        
-        glDrawArrays(GL_POINTS, 0, NUM_PARTICLES);
-        
-        err = glGetError();
-        if (err != GL_NO_ERROR && frameCounter % 60 == 0) {
-            cout << "OpenGL error after draw: " << err << endl;
-        }
-        
-        glBindVertexArray(0);
-        
-        particleRenderShader.end();
-        
-        glDisable(GL_PROGRAM_POINT_SIZE);
-    } else {
-        // CPU rendering fallback (for debugging)
-        ofSetColor(100, 150, 255);
-        for (int i = 0; i < NUM_PARTICLES; i++) {
-            ofDrawCircle(particles[i].position.x, particles[i].position.y, particleSize);
-        }
-    }
+    glEnable(GL_PROGRAM_POINT_SIZE);
     
+    particleRenderShader.begin();
+    ofMatrix4x4 mvp = ofGetCurrentMatrix(OF_MATRIX_PROJECTION) * ofGetCurrentMatrix(OF_MATRIX_MODELVIEW);
+    particleRenderShader.setUniformMatrix4f("modelViewProjectionMatrix", mvp);
+    particleRenderShader.setUniform1f("particleSize", particleSize);
+    
+    glBindVertexArray(vao[currentBuffer]);
+    glDrawArrays(GL_POINTS, 0, NUM_PARTICLES);
+    glBindVertexArray(0);
+    
+    particleRenderShader.end();
+    
+    glDisable(GL_PROGRAM_POINT_SIZE);
     ofDisableBlendMode();
-    
-    // Additional debug: Try drawing a single point with immediate mode
-    if (useShaderRendering && frameCounter < 120) {
-        glPointSize(20.0f);
-        glColor4f(1.0f, 0.0f, 0.0f, 1.0f);
-        glBegin(GL_POINTS);
-        glVertex2f(ofGetWidth() / 2, ofGetHeight() / 2);
-        glEnd();
-        
-        ofSetColor(255, 255, 0);
-        ofDrawBitmapString("GPU Mode - If you see a RED point, fixed-function works", 20, ofGetHeight() - 40);
-    }
-    
-    // Debug: Draw a test circle to verify rendering is working
-    if (frameCounter < 60) {  // Only for first second
-        ofSetColor(255, 0, 0);
-        ofDrawCircle(ofGetWidth() / 2, ofGetHeight() / 2, 50);
-    }
     
     auto endRender = std::chrono::high_resolution_clock::now();
     float renderTime = std::chrono::duration<float, std::milli>(endRender - startRender).count();
@@ -757,40 +591,19 @@ void ofApp::keyPressed(int key) {
     if (key == ' ') {
         attractMode = !attractMode;
     }
-    if (key == 'r' || key == 'R') {
-        useShaderRendering = !useShaderRendering;
-        cout << "Rendering mode: " << (useShaderRendering ? "GPU" : "CPU") << endl;
-    }
     if (key == 'l' || key == 'L') {
         drawLines = !drawLines;
-        cout << "Line rendering: " << (drawLines ? "ON" : "OFF") << endl;
-    }
-    if (key == 's' || key == 'S') {
-        useSpatialSort = !useSpatialSort;
-        cout << "Spatial sort: " << (useSpatialSort ? "ON" : "OFF") << endl;
-    }
-    if (key == 'm' || key == 'M') {
-        showMortonColors = !showMortonColors;
-        cout << "Morton color visualization: " << (showMortonColors ? "ON" : "OFF") << endl;
-    }
-    if (key == 'c' || key == 'C') {
-        showSortedConnections = !showSortedConnections;
-        cout << "Sorted connection colors: " << (showSortedConnections ? "ON" : "OFF") << endl;
     }
     if (key == '+' || key == '=') {
         adaptiveSearchRadius = std::min(adaptiveSearchRadius + 50, NUM_PARTICLES);
-        cout << "Search radius: " << adaptiveSearchRadius << endl;
     }
     if (key == '-' || key == '_') {
         adaptiveSearchRadius = std::max(adaptiveSearchRadius - 50, 50);
-        cout << "Search radius: " << adaptiveSearchRadius << endl;
     }
     if (key == '[') {
         connectionDistance = fmax(connectionDistance - 10.0f, 20.0f);
-        cout << "Connection distance: " << connectionDistance << endl;
     }
     if (key == ']') {
         connectionDistance = fmin(connectionDistance + 10.0f, 200.0f);
-        cout << "Connection distance: " << connectionDistance << endl;
     }
 }
